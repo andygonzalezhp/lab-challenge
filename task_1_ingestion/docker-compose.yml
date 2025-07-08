@@ -1,7 +1,6 @@
-version: "3.9"
 services:
   db:
-    image: timescale/timescaledb-postgis:2.15.1-pg15
+    image: timescale/timescaledb-postgis:pg15-latest
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
