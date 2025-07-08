@@ -1,0 +1,2 @@
+# m h dom mon dow user command
+0 1 * * * root python /app/ingest.py >> /var/log/ingest.log 2>&1
