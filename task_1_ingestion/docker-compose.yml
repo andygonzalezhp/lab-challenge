@@ -1,6 +1,6 @@
 services:
   db:
-    image: timescale/timescaledb-postgis:pg15-latest
+    image: timescaledb:latest-pg15
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
