@@ -2,9 +2,9 @@ services:
   db:
     image: timescale/timescaledb:latest-pg15
     environment:
-      POSTGRES_USER: postgres
+      POSTGRES_USER:     postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: wearables
+      POSTGRES_DB:       wearables
     ports: ["5432:5432"]
     volumes:
       - db-data:/var/lib/postgresql/data
@@ -19,15 +19,17 @@ services:
       db:
         condition: service_healthy
     environment:
-      PGHOST: db
-      PGPORT: 5432
-      PGUSER: postgres
-      PGPASSWORD: postgres
-      PGDATABASE: wearables
-      DATA_DIR: /data
+      PGHOST:      db
+      PGPORT:      5432
+      PGUSER:      postgres
+      PGPASSWORD:  postgres
+      PGDATABASE:  wearables
+      DATA_DIR:    /data             
     volumes:
       - ../task_0b/data/participant_001:/data:ro
+      - ingest-state:/checkpoint      
     restart: on-failure
 
 volumes:
   db-data:
+  ingest-state:

@@ -1,5 +1,6 @@
 FROM python:3.11-slim
 WORKDIR /app
+RUN apt-get update && apt-get install -y cron
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY cronjob /etc/cron.d/ingest-cron
