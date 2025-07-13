@@ -181,3 +181,131 @@ SELECT create_hypertable('raw_data', 'ts');
 * **CORS errors**: FastAPI is configured with `allow_origins=["*"]` for development.
 
 ---
+
+## Task 3 – Optimizing Design for Multi-Year / Multi-User Queries
+
+In this task, we enhance scalability and performance for large date-range and multi-user queries by leveraging TimescaleDB continuous aggregates and smart API routing.
+
+###  Requirements Mapping
+
+| Requirement                                      | Implementation Summary                                                                    |
+| ------------------------------------------------ | ----------------------------------------------------------------------------------------- |
+| Create precomputed summaries (1m, 1h, 1d)        | Defined `data_1m`, `data_1h`, `data_1d` continuous aggregates in `aggregates.sql`.        |
+| Refresh aggregates daily at ingestion time       | Added `add_continuous_aggregate_policy` for each view to schedule hourly/daily refreshes. |
+| Auto-select appropriate table based on date span | Implemented `choose_table()` in `main.py` to route to raw or aggregated tables.           |
+
+###  Continuous Aggregates Definition
+
+**File:** `backend/sql/aggregates.sql`
+
+```sql
+-- Enable TimescaleDB extension
+CREATE EXTENSION IF NOT EXISTS timescaledb;
+
+-- 1-minute aggregate
+CREATE MATERIALIZED VIEW IF NOT EXISTS data_1m
+WITH (timescaledb.continuous) AS
+SELECT
+  time_bucket('1 minute', ts) AS bucket,
+  participant,
+  metric,
+  AVG(value) AS value
+FROM raw_data
+GROUP BY bucket, participant, metric;
+
+-- 1-hour aggregate
+CREATE MATERIALIZED VIEW IF NOT EXISTS data_1h
+WITH (timescaledb.continuous) AS
+SELECT
+  time_bucket('1 hour', ts) AS bucket,
+  participant,
+  metric,
+  AVG(value) AS value
+FROM raw_data
+GROUP BY bucket, participant, metric;
+
+-- 1-day aggregate
+CREATE MATERIALIZED VIEW IF NOT EXISTS data_1d
+WITH (timescaledb.continuous) AS
+SELECT
+  time_bucket('1 day', ts) AS bucket,
+  participant,
+  metric,
+  AVG(value) AS value
+FROM raw_data
+GROUP BY bucket, participant, metric;
+
+-- Continuous aggregate refresh policies
+SELECT add_continuous_aggregate_policy('data_1m',
+  start_offset      => INTERVAL '1 day',
+  end_offset        => INTERVAL '1 hour',
+  schedule_interval => INTERVAL '1 hour');
+
+SELECT add_continuous_aggregate_policy('data_1h',
+  start_offset      => INTERVAL '7 days',
+  end_offset        => INTERVAL '1 day',
+  schedule_interval => INTERVAL '6 hours');
+
+SELECT add_continuous_aggregate_policy('data_1d',
+  start_offset      => INTERVAL '30 days',
+  end_offset        => INTERVAL '7 days',
+  schedule_interval => INTERVAL '1 day');
+```
+
+###  Backend Routing Logic
+
+**File:** `backend/main.py`
+
+```python
+from datetime import timedelta
+
+def choose_table(start_date, end_date):
+    diff = end_date - start_date
+    if diff <= timedelta(days=1):
+        return 'raw_data', 'ts'
+    if diff <= timedelta(days=7):
+        return 'data_1m', 'bucket'
+    if diff <= timedelta(days=30):
+        return 'data_1h', 'bucket'
+    return 'data_1d', 'bucket'
+
+@app.get('/data', response_model=TSResponse)
+def get_data(start_date: date, end_date: date, metric: str, user_id: int = 1):
+    table, ts_col = choose_table(start_date, end_date)
+    sql = f"""
+    SELECT {ts_col} AS ts, value
+    FROM {table}
+    WHERE {ts_col} BETWEEN %s AND %s
+      AND participant = %s
+      AND metric = %s
+    ORDER BY {ts_col}
+    """
+    params = (start_date, end_date + timedelta(days=1), user_id, metric)
+    # execute and return results as before
+```
+
+###  Testing Instructions
+
+1. **Verify views exist:**
+
+   ```sql
+   \dv
+   ```
+2. **Smoke-test endpoint for various ranges:**
+
+   ```bash
+   # 2-day (raw_data)
+   curl 'http://localhost:8000/data?start_date=2024-01-01&end_date=2024-01-02&metric=hr'
+
+   # 7-day (data_1m)
+   curl 'http://localhost:8000/data?start_date=2024-01-01&end_date=2024-01-08&metric=hr'
+
+   # 30-day (data_1h)
+   curl 'http://localhost:8000/data?start_date=2024-01-01&end_date=2024-01-30&metric=hr'
+
+   # 90-day (data_1d)
+   curl 'http://localhost:8000/data?start_date=2024-01-01&end_date=2024-04-01&metric=hr'
+   ```
+3. **Confirm result counts** match expected bucket sizes (sec/min/hr/day).
+
+---
