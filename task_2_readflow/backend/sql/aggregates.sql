@@ -50,3 +50,4 @@ SELECT add_continuous_aggregate_policy('data_1d',
   start_offset => INTERVAL '30 days',
   end_offset   => INTERVAL '7 days',
   schedule_interval => INTERVAL '1 day');
+  
