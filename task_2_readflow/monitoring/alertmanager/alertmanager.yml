@@ -1,0 +1,21 @@
+global:
+  smtp_smarthost: 'mailhog:1025'
+  smtp_from: 'alerts@wearipedia.local'
+  smtp_require_tls: false
+
+route:
+  receiver: email-critical
+  group_by: ['alertname']
+  group_wait: 0s
+  group_interval: 30s
+  repeat_interval: 1m
+  routes:
+    - matchers:
+        - severity = "critical"
+      receiver: email-critical
+
+receivers:
+  - name: email-critical
+    email_configs:
+      - to: 'admin@wearipedia.com'
+        send_resolved: true
