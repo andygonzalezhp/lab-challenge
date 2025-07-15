@@ -6,8 +6,11 @@ import os, psycopg2, datetime as dt
 from datetime import timedelta
 import bisect
 import smtplib, email.message
+from prometheus_fastapi_instrumentator import Instrumentator
 
 app = FastAPI(title="Wearables Read-API")
+
+Instrumentator().instrument(app).expose(app)
 
 
 app.add_middleware(
